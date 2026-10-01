@@ -1,6 +1,18 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import localFont from "next/font/local";
+
+const manrope = localFont({
+  src: "./fonts/Manrope-VariableFont_wght.ttf",
+  variable: "--font-manrope",
+  display: "swap"
+})
+const jakarta = localFont({
+  src: "./fonts/PlusJakartaSans-VariableFont_wght.ttf",
+  variable: "--font-jakarta",
+  display: "swap"
+})
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -21,7 +33,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${manrope.variable} ${jakarta.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>

@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Karaya Villa - Replica</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Importing fonts similar to the original template -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Manrope:wght@300;400;500;600&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Manrope', 'sans-serif'],
+                        serif: ['Instrument Serif', 'serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#F7F7F6',
+                            900: '#1A1A1A'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <style>
+        body { 
+            background-color: #F7F7F6; 
+            color: #1A1A1A;
+        }
+
+        /* Framer-style Double Text Hover Animation */
+        .hover-text-swap {
+            position: relative;
+            overflow: hidden;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .hover-text-swap > div {
+            transition: transform 0.5s cubic-bezier(0.19, 1, 0.22, 1);
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .hover-text-swap .primary-text {
+            transform: translateY(0);
+        }
+        .hover-text-swap .secondary-text {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            transform: translateY(100%);
+        }
+        .hover-text-swap:hover .primary-text {
+            transform: translateY(-100%);
+        }
+        .hover-text-swap:hover .secondary-text {
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body class="antialiased min-h-screen flex flex-col items-center">
+
+    <!-- ========== NAVBAR ========== -->
+    <nav class="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-5 md:px-10 max-w-[1440px] mx-auto w-full">
+        <!-- Logo Area -->
+        <a href="#" class="flex-shrink-0 text-2xl font-serif tracking-wide text-brand-900">
+            Karaya
+        </a>
+
+        <!-- Desktop Links -->
+        <div class="hidden md:flex items-center space-x-8 bg-white/70 backdrop-blur-md px-8 py-3.5 rounded-full shadow-sm border border-black/5">
+            <a href="#" class="text-sm font-medium text-brand-900 hover:opacity-60 transition-opacity">Home</a>
+            <a href="#" class="text-sm font-medium text-brand-900 hover:opacity-60 transition-opacity">The Villa</a>
+            <a href="#" class="text-sm font-medium text-brand-900 hover:opacity-60 transition-opacity">Experiences</a>
+            <a href="#" class="text-sm font-medium text-brand-900 hover:opacity-60 transition-opacity">Gallery</a>
+            <a href="#" class="text-sm font-medium text-brand-900 hover:opacity-60 transition-opacity">Journal</a>
+        </div>
+
+        <!-- Book Now Button -->
+        <a href="#" class="hover-text-swap px-6 py-3.5 bg-brand-900 text-white text-sm font-medium rounded-full shadow-lg hover:bg-black transition-colors w-[120px]">
+            <div class="primary-text">Book Now</div>
+            <div class="secondary-text">Book Now</div>
+        </a>
+    </nav>
+
+    <!-- ========== HERO SECTION ========== -->
+    <main class="w-full max-w-[1440px] px-4 md:px-10 pt-28 pb-12 mx-auto flex-1 flex flex-col">
+        
+        <!-- Main Image Card -->
+        <div class="relative w-full h-[70vh] min-h-[600px] rounded-[2rem] md:rounded-[2.5rem] overflow-hidden flex flex-col justify-end p-8 md:p-16">
+            
+            <!-- Hero Background Image (Direct from template) -->
+            <img src="https://framerusercontent.com/images/je0sSQV2EcyKApp8wFTtQbMtQ.png" 
+                 alt="Karaya Villa Pool" 
+                 class="absolute inset-0 w-full h-full object-cover" />
+            
+            <!-- Dark Gradient Overlay for text readability -->
+            <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
+
+            <!-- Hero Content -->
+            <div class="relative z-10 flex flex-col items-start max-w-3xl text-white">
+                
+                <!-- Tag -->
+                <div class="px-4 py-1.5 border border-white/30 bg-white/10 backdrop-blur-md rounded-full text-xs font-semibold tracking-widest uppercase mb-6">
+                    Karaya
+                </div>
+                
+                <!-- Headline -->
+                <h1 class="text-5xl md:text-7xl lg:text-[5rem] font-serif leading-[1.05] mb-6">
+                    One Villa.<br>Infinite Memories.<br>Yours Alone.
+                </h1>
+                
+                <!-- Sub-headline -->
+                <p class="text-lg md:text-xl font-light text-white/90 max-w-lg mb-10 leading-relaxed">
+                    A secluded luxury villa in the heart of Bali — crafted for those who want more than a stay.
+                </p>
+                
+                <!-- CTA Buttons -->
+                <div class="flex flex-wrap items-center gap-4">
+                    <a href="#" class="hover-text-swap px-8 py-4 bg-white text-brand-900 text-sm font-semibold rounded-full hover:bg-gray-100 transition-colors w-[170px]">
+                        <div class="primary-text">Book Your Stay</div>
+                        <div class="secondary-text">Book Your Stay</div>
+                    </a>
+                    
+                    <a href="#" class="hover-text-swap px-8 py-4 bg-white/20 backdrop-blur-md border border-white/30 text-white text-sm font-semibold rounded-full hover:bg-white/30 transition-colors w-[120px]">
+                        <div class="primary-text">Explore</div>
+                        <div class="secondary-text">Explore</div>
+                    </a>
+                </div>
+
+            </div>
+        </div>
+        
+        <!-- Features Banner (Bottom of Hero) -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-10 mt-6 px-4 md:px-8 py-8 md:py-10 bg-white rounded-[2rem] border border-black/5 shadow-sm">
+            
+            <div class="flex flex-col gap-1.5">
+                <div class="w-2 h-2 rounded-full bg-brand-900 mb-2"></div>
+                <h3 class="font-semibold text-brand-900 text-base md:text-lg">Direct Booking</h3>
+                <p class="text-sm text-gray-500 font-medium">No platform fees, ever</p>
+            </div>
+            
+            <div class="flex flex-col gap-1.5">
+                <div class="w-2 h-2 rounded-full bg-brand-900 mb-2"></div>
+                <h3 class="font-semibold text-brand-900 text-base md:text-lg">4.9 Rating</h3>
+                <p class="text-sm text-gray-500 font-medium">Verified by 500+ guests</p>
+            </div>
+            
+            <div class="flex flex-col gap-1.5">
+                <div class="w-2 h-2 rounded-full bg-brand-900 mb-2"></div>
+                <h3 class="font-semibold text-brand-900 text-base md:text-lg">24/7 Concierge</h3>
+                <p class="text-sm text-gray-500 font-medium">Personal, not a call center</p>
+            </div>
+            
+            <div class="flex flex-col gap-1.5">
+                <div class="w-2 h-2 rounded-full bg-brand-900 mb-2"></div>
+                <h3 class="font-semibold text-brand-900 text-base md:text-lg">Exclusive Access</h3>
+                <p class="text-sm text-gray-500 font-medium">Perks only direct guests receive</p>
+            </div>
+
+        </div>
+    </main>
+
+</body>
+</html>
