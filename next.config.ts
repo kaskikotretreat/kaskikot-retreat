@@ -1,7 +1,3 @@
-import type { NextConfig } from "next";
+import { defineCloudflareConfig } from "@opennextjs/cloudflare";
 
-const nextConfig: NextConfig = {
- allowedDevOrigins: ["192.*"]
-};
-
-export default nextConfig;
+export default defineCloudflareConfig();

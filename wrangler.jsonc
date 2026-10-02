@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "kaskikot-retreat",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+    "vars": {
+    "SENDER_EMAIL": "kaskikotretreat@gmail.com",
+    "ADMIN_EMAIL": "kaskikotretreat@gmail.com"
+  },
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "kaskikot-retreat"
+    }
+  ]
+}
