@@ -1,125 +1,135 @@
+// app/api/booking/route.ts
 import { NextResponse } from 'next/server';
+import { getAdminAddress, missingEmailSettings, sendEmail } from '../../lib/brevo';
+import {
+  BRAND,
+  buildAdminEmail,
+  buildGuestEmail,
+  countNights,
+  type Booking,
+} from '../../lib/email-templates';
 
-const esc = (v: unknown) =>
-  String(v ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-async function sendBrevo(label: string, payload: object) {
-  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
-    method: 'POST',
-    headers: {
-      'api-key': process.env.BREVO_API_KEY || '',
-      'Content-Type': 'application/json',
-      accept: 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
-  const body = await res.json().catch(() => ({}));
+const GENERIC_ERROR =
+  'We could not send your request right now. Please try again in a moment or contact us directly.';
 
-  if (res.ok) {
-    console.log(`[Brevo] ${label} email sent (${res.status})`);
-  } else {
-    console.error(`[Brevo] ${label} email FAILED (${res.status}):`, body);
-  }
-  return { ok: res.ok, status: res.status, body };
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/** Trim, collapse whitespace and limit length (keeps headers and emails tidy). */
+const clean = (value: unknown, max: number) =>
+  String(value ?? '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, max);
+
+function makeReference(): string {
+  const date = new Date().toISOString().slice(2, 10).replace(/-/g, ''); // YYMMDD
+  const code = Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `KK-${date}-${code}`;
 }
 
+/** JSON error response. Set DEBUG_BOOKING=true to also show technical detail. */
+function fail(message: string, status: number, detail?: string) {
+  const showDetail = process.env.DEBUG_BOOKING === 'true' && detail;
+  return NextResponse.json({ error: showDetail ? `${message} (${detail})` : message }, { status });
+}
+
+/** Validates and normalises the form data. */
+function parseBooking(raw: Record<string, unknown>): { booking: Booking } | { error: string } {
+  const name = clean(raw.name, 100);
+  const email = clean(raw.email, 150).toLowerCase();
+  const phone = clean(raw.phone, 30);
+  const nationality = clean(raw.nationality, 60);
+  const checkIn = clean(raw.checkIn, 10);
+  const checkOut = clean(raw.checkOut, 10);
+
+  if (!name || !phone || !nationality) return { error: 'Please fill in all required fields.' };
+  if (!EMAIL.test(email)) return { error: 'Please enter a valid email address.' };
+  if (!ISO_DATE.test(checkIn) || !ISO_DATE.test(checkOut)) {
+    return { error: 'Please choose valid check-in and check-out dates.' };
+  }
+
+  // Allow "yesterday" in UTC so guests in Nepal (UTC+5:45) can still pick today.
+  const earliest = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+  if (checkIn < earliest) return { error: 'Check-in date cannot be in the past.' };
+
+  const nights = countNights(checkIn, checkOut);
+  if (nights < 1) return { error: 'Check-out must be after check-in.' };
+
+  return {
+    booking: {
+      reference: makeReference(),
+      name,
+      email,
+      phone,
+      nationality,
+      guests: Math.min(10, Math.max(1, parseInt(String(raw.guests), 10) || 1)),
+      roomType: clean(raw.roomType, 60) || 'Standard Room',
+      checkIn,
+      checkOut,
+      nights,
+      arrivalTime: clean(raw.arrivalTime, 40),
+      specialRequests: String(raw.specialRequests ?? '').trim().slice(0, 1000),
+    },
+  };
+}
+
+// ─── Routes ──────────────────────────────────────────────────────────────────
+
+/** Open /api/booking in a browser to check the route and environment settings. */
 export async function GET() {
-  // Lets you open /api/booking in the browser to check env + route status
+  const missing = missingEmailSettings();
   return NextResponse.json({
     route: 'ok',
-    BREVO_API_KEY: process.env.BREVO_API_KEY ? 'loaded' : 'MISSING',
-    SENDER_EMAIL: process.env.SENDER_EMAIL ? 'loaded' : 'MISSING',
-    ADMIN_EMAIL: process.env.ADMIN_EMAIL ? 'loaded' : 'MISSING',
+    emailSettings: missing.length === 0 ? 'loaded' : `MISSING: ${missing.join(', ')}`,
+    ADMIN_EMAIL: process.env.ADMIN_EMAIL ? 'loaded' : 'not set (using SENDER_EMAIL)',
   });
 }
 
 export async function POST(req: Request) {
   try {
-    // Fail early and clearly if env variables are missing
-    if (!process.env.BREVO_API_KEY || !process.env.SENDER_EMAIL) {
-      console.error('Missing env: BREVO_API_KEY or SENDER_EMAIL. Check .env.local location and restart the server.');
-      return NextResponse.json(
-        { error: 'Server email settings are missing. Check .env.local and restart.' },
-        { status: 500 }
-      );
+    const missing = missingEmailSettings();
+    if (missing.length > 0) {
+      console.error(`Missing environment settings: ${missing.join(', ')}`);
+      return fail(GENERIC_ERROR, 500, `missing ${missing.join(', ')}`);
     }
 
-    const d = await req.json();
-    const { name, email, phone, nationality, guests, roomType, checkIn, checkOut, arrivalTime, specialRequests } = d;
+    const raw = await req.json().catch(() => null);
+    if (!raw || typeof raw !== 'object') return fail('Invalid request.', 400);
 
-    // Basic server-side validation
-    if (!name || !email || !phone || !checkIn || !checkOut) {
-      return NextResponse.json({ error: 'Missing required fields.' }, { status: 400 });
-    }
-    if (!/^\S+@\S+\.\S+$/.test(email)) {
-      return NextResponse.json({ error: 'Invalid email.' }, { status: 400 });
-    }
-    if (new Date(checkOut) <= new Date(checkIn)) {
-      return NextResponse.json({ error: 'Check-out must be after check-in.' }, { status: 400 });
-    }
+    const parsed = parseBooking(raw as Record<string, unknown>);
+    if ('error' in parsed) return fail(parsed.error, 400);
+    const { booking } = parsed;
 
-    const senderEmail = process.env.SENDER_EMAIL;
-    const adminEmail = process.env.ADMIN_EMAIL || senderEmail;
-    const sender = { name: 'Kaskikot Retreat', email: senderEmail };
+    const guestEmail = buildGuestEmail(booking);
+    const adminEmail = buildAdminEmail(booking);
 
-    const details = `
-      <p><strong>Room:</strong> ${esc(roomType)}</p>
-      <p><strong>Check-in:</strong> ${esc(checkIn)}</p>
-      <p><strong>Check-out:</strong> ${esc(checkOut)}</p>
-      <p><strong>Guests:</strong> ${esc(guests)}</p>
-      <p><strong>Arrival time:</strong> ${esc(arrivalTime) || 'Not specified'}</p>
-      <p><strong>Special requests:</strong> ${esc(specialRequests) || 'None'}</p>
-    `;
+    const [guestResult, adminResult] = await Promise.all([
+      sendEmail('Guest', {
+        to: { email: booking.email, name: booking.name },
+        ...guestEmail,
+      }),
+      sendEmail('Admin', {
+        to: { email: getAdminAddress(), name: `${BRAND.shortName} Bookings` },
+        replyTo: { email: booking.email, name: booking.name },
+        ...adminEmail,
+      }),
+    ]);
 
-    // 1) Email to the guest
-    const guestMail = sendBrevo('Guest', {
-      sender,
-      to: [{ email, name }],
-      subject: 'We received your booking request – Kaskikot Retreat',
-      htmlContent: `
-        <h2>Thank you, ${esc(name)}!</h2>
-        <p>We have received your request and will confirm availability shortly.</p>
-        ${details}
-        <p>Questions? Just reply to this email.</p>
-      `,
-    });
-
-    // 2) Email to you (admin), reply-to set to the guest
-    const adminMail = sendBrevo('Admin', {
-      sender,
-      to: [{ email: adminEmail, name: 'Admin Booking' }],
-      replyTo: { email, name },
-      subject: `New booking request – ${name}`,
-      htmlContent: `
-        <h2>New booking request</h2>
-        <p><strong>Name:</strong> ${esc(name)}</p>
-        <p><strong>Email:</strong> ${esc(email)}</p>
-        <p><strong>Phone/WhatsApp:</strong> ${esc(phone)}</p>
-        <p><strong>Nationality:</strong> ${esc(nationality)}</p>
-        ${details}
-      `,
-    });
-
-    const [g, a] = await Promise.all([guestMail, adminMail]);
-
-    // Admin email is the one that matters. Show the real Brevo message.
-    if (!a.ok) {
-      const reason = a.body?.message || a.body?.code || 'Email provider error';
-      return NextResponse.json({ error: `Brevo: ${reason}` }, { status: 502 });
+    // The admin email is the one that matters: without it the booking is lost.
+    if (!adminResult.ok) {
+      return fail(GENERIC_ERROR, 502, `Brevo: ${adminResult.reason}`);
     }
 
-    // Guest email failed but admin got the booking: still counts as success
     return NextResponse.json({
       message: 'Booking request sent successfully!',
-      guestEmailSent: g.ok,
+      reference: booking.reference,
+      guestEmailSent: guestResult.ok,
     });
   } catch (err) {
     console.error('Internal error:', err);
-    const msg = err instanceof Error ? err.message : 'Unknown error';
-    return NextResponse.json({ error: `Server error: ${msg}` }, { status: 500 });
+    return fail(GENERIC_ERROR, 500, err instanceof Error ? err.message : 'Unknown error');
   }
 }
