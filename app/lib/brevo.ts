@@ -2,7 +2,7 @@
 // Small wrapper around Brevo's transactional email API.
 
 const BREVO_URL = 'https://api.brevo.com/v3/smtp/email';
-const SENDER_NAME = 'Kaskikot Retreat';
+const SENDER_NAME = 'Kaskikot Holiday Home';
 
 type Party = { email: string; name?: string };
 

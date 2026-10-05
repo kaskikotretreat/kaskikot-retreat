@@ -2,6 +2,8 @@
 // Branded HTML + plain-text emails. Layout uses tables and inline styles
 // because that is what email clients (Gmail, Outlook, Apple Mail) render reliably.
 
+import { formatPrice } from './pricing';
+
 // ─── Edit these to match your property ───────────────────────────────────────
 export const BRAND = {
   name: 'Kaskikot Retreat & Holiday Home',
@@ -34,6 +36,7 @@ export type Booking = {
   nights: number;
   arrivalTime: string;
   specialRequests: string;
+  price?: { total: number; label: string }; // estimate shown to the guest
 };
 
 export type BuiltEmail = { subject: string; html: string; text: string };
@@ -158,7 +161,8 @@ const stayRows = (b: Booking) =>
   row('Check-out', formatDate(b.checkOut)) +
   row('Length of stay', plural(b.nights, 'night')) +
   row('Guests', String(b.guests)) +
-  row('Estimated arrival', b.arrivalTime || 'Not specified');
+  row('Estimated arrival', b.arrivalTime || 'Not specified') +
+  (b.price ? row('Rate', b.price.label) + row('Estimated total', formatPrice(b.price.total)) : '');
 
 // ─── Guest email: "we received your request" ────────────────────────────────
 
@@ -191,7 +195,7 @@ export function buildGuestEmail(b: Booking): BuiltEmail {
       ${step(3, 'Your stay is confirmed', 'Your booking is secured once you receive that message.')}
     </table>
 
-    ${notesBox('Please note', 'This email acknowledges your request. It is not yet a confirmed reservation.')}
+    ${notesBox('Please note', `This email acknowledges your request. It is not yet a confirmed reservation.${b.price ? ' The price shown is an estimate; we confirm the final amount in our reply.' : ''}`)}
 
     <p style="margin:28px 0 12px;font-size:14px;color:${c.muted};">Questions or changes? Just reply to this email.</p>
     ${whatsappButton}
@@ -208,6 +212,7 @@ export function buildGuestEmail(b: Booking): BuiltEmail {
     `Check-out: ${formatDate(b.checkOut)} (${plural(b.nights, 'night')})`,
     `Guests: ${b.guests}`,
     `Estimated arrival: ${b.arrivalTime || 'Not specified'}`,
+    ...(b.price ? [`Estimated total: ${formatPrice(b.price.total)} (${b.price.label})`] : []),
     b.specialRequests ? `Special requests: ${b.specialRequests}` : '',
     '',
     'This is an acknowledgement of your request, not yet a confirmed reservation.',
@@ -267,8 +272,104 @@ export function buildAdminEmail(b: Booking): BuiltEmail {
     `Check-out: ${formatDate(b.checkOut)} (${plural(b.nights, 'night')})`,
     `Guests: ${b.guests}`,
     `Estimated arrival: ${b.arrivalTime || 'Not specified'}`,
+    ...(b.price ? [`Estimated total: ${formatPrice(b.price.total)} (${b.price.label})`] : []),
     `Special requests: ${b.specialRequests || 'None'}`,
   ].join('\n');
 
   return { subject, html: layout(`New request from ${b.name}`, body), text };
+}
+
+// ─── Guest email when you confirm or decline a request (sent from the admin page) ───
+
+export function buildStatusEmail(b: Booking, kind: 'confirmed' | 'declined'): BuiltEmail {
+  const firstName = b.name.split(' ')[0];
+  const whatsappButton = BRAND.whatsapp
+    ? button(`https://wa.me/${digitsOnly(BRAND.whatsapp)}?text=${encodeURIComponent(`Hi, my booking reference is ${b.reference}.`)}`, 'Message us on WhatsApp', c.accent)
+    : '';
+
+  if (kind === 'confirmed') {
+    const body = `
+      ${pill('Booking confirmed')}
+      <h1 style="margin:16px 0 8px;font-family:Georgia,'Times New Roman',serif;font-size:26px;color:${c.primary};">
+        See you soon, ${esc(firstName)}!</h1>
+      <p style="margin:0;font-size:15px;line-height:1.7;color:${c.text};">
+        Your stay at ${esc(BRAND.shortName)} is confirmed for <strong>${esc(plural(b.nights, 'night'))}</strong>,
+        from ${esc(formatDate(b.checkIn))} to ${esc(formatDate(b.checkOut))}.</p>
+      ${referenceBox(b.reference)}
+      ${sectionTitle('Your stay')}
+      ${table(stayRows(b))}
+      ${b.specialRequests ? notesBox('Your special requests', b.specialRequests) : ''}
+      ${notesBox('Before you arrive', 'If you have questions or need to change anything, just reply to this email.')}
+      <div style="margin-top:24px;">${whatsappButton}</div>
+    `;
+    const text = [
+      `See you soon, ${firstName}!`,
+      '',
+      `Your booking ${b.reference} is confirmed.`,
+      `Room: ${b.roomType}`,
+      `Check-in: ${formatDate(b.checkIn)}`,
+      `Check-out: ${formatDate(b.checkOut)} (${plural(b.nights, 'night')})`,
+      ...(b.price ? [`Estimated total: ${formatPrice(b.price.total)} (${b.price.label})`] : []),
+      '',
+      'Questions or changes? Just reply to this email.',
+      '',
+      BRAND.name,
+    ].join('\n');
+    return {
+      subject: `Booking confirmed (${b.reference}) · ${BRAND.shortName}`,
+      html: layout(`Your stay ${b.reference} is confirmed.`, body),
+      text,
+    };
+  }
+
+  const body = `
+    ${pill('About your request')}
+    <h1 style="margin:16px 0 8px;font-family:Georgia,'Times New Roman',serif;font-size:26px;color:${c.primary};">
+      Thank you, ${esc(firstName)}</h1>
+    <p style="margin:0;font-size:15px;line-height:1.7;color:${c.text};">
+      Unfortunately we cannot offer ${esc(b.roomType)} from ${esc(formatDate(b.checkIn))} to ${esc(formatDate(b.checkOut))}.
+      We are sorry to disappoint you.</p>
+    ${referenceBox(b.reference)}
+    <p style="margin:24px 0 0;font-size:15px;line-height:1.7;color:${c.text};">
+      You are welcome to send a new request for other dates or another room. If you reply to this email, we will happily
+      help you find a good time.</p>
+    <div style="margin-top:24px;">${whatsappButton}</div>
+  `;
+  const text = [
+    `Thank you, ${firstName}.`,
+    '',
+    `Unfortunately we cannot offer ${b.roomType} from ${formatDate(b.checkIn)} to ${formatDate(b.checkOut)} (reference ${b.reference}).`,
+    'You are welcome to send a new request for other dates or another room, or reply to this email and we will help.',
+    '',
+    BRAND.name,
+  ].join('\n');
+  return {
+    subject: `About your booking request (${b.reference}) · ${BRAND.shortName}`,
+    html: layout(`An update on request ${b.reference}.`, body),
+    text,
+  };
+}
+
+// ─── Admin password reset email ───
+
+export function buildResetEmail(link: string): BuiltEmail {
+  const body = `
+    ${pill('Password reset')}
+    <h1 style="margin:16px 0 8px;font-family:Georgia,'Times New Roman',serif;font-size:26px;color:${c.primary};">
+      Reset your admin password</h1>
+    <p style="margin:0 0 20px;font-size:15px;line-height:1.7;color:${c.text};">
+      Someone asked to reset the password for the ${esc(BRAND.shortName)} admin page. Use the button below to choose a new one.
+      The link works once and expires in 30 minutes.</p>
+    ${button(esc(link), 'Choose a new password')}
+    ${notesBox('Did not ask for this?', 'You can ignore this email. Your password stays the same.')}
+  `;
+  const text = [
+    `Reset the ${BRAND.shortName} admin password`,
+    '',
+    'Open this link to choose a new password. It works once and expires in 30 minutes:',
+    link,
+    '',
+    'Did not ask for this? Ignore this email. Your password stays the same.',
+  ].join('\n');
+  return { subject: `Reset your ${BRAND.shortName} admin password`, html: layout('Choose a new admin password.', body), text };
 }

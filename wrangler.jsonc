@@ -1,21 +1,32 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "kaskikot-retreat",
-  "main": ".open-next/worker.js",
-  "compatibility_date": "2026-09-01",
-  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
-  "assets": {
-    "directory": ".open-next/assets",
-    "binding": "ASSETS"
-  },
-    "vars": {
-    "SENDER_EMAIL": "kaskikotretreat@gmail.com",
-    "ADMIN_EMAIL": "kaskikotretreat@gmail.com"
-  },
-  "services": [
-    {
-      "binding": "WORKER_SELF_REFERENCE",
-      "service": "kaskikot-retreat"
-    }
-  ]
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "kaskikot-retreat",
+	"main": ".open-next/worker.js",
+	"compatibility_date": "2026-09-01",
+	"compatibility_flags": [
+		"nodejs_compat",
+		"global_fetch_strictly_public"
+	],
+	"assets": {
+		"directory": ".open-next/assets",
+		"binding": "ASSETS"
+	},
+	"vars": {
+		"SENDER_EMAIL": "kaskikotretreat@gmail.com",
+    "ADMIN_EMAIL": "kaskikotretreat@gmail.com",
+		// "ADMIN_EMAIL": "Kaskikotholidayhomes@gmail.com"
+	},
+	"services": [
+		{
+			"binding": "WORKER_SELF_REFERENCE",
+			"service": "kaskikot-retreat"
+		}
+	],
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "kaskikot-db",
+			"database_id": "fc879af8-7fc1-4e71-894e-173ae9b90048",
+		}
+	]
 }

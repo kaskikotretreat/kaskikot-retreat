@@ -171,7 +171,7 @@ export default function NavBar({ intro = false }: { intro?: boolean }) {
               <path d="M2 25 L10 12 L15 19 L21 8 L30 25" />
               <circle cx="25" cy="7" r="2" />
             </svg>
-            <span className={`${display.className} text-2xl tracking-wide`}>Kaskikot Retreat</span>
+            <span className={`${display.className} text-2xl tracking-wide`}>Kaskikot Holiday Home</span>
           </Link>
 
           <nav aria-label="Main" className="hidden items-center gap-8 md:flex">

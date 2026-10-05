@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
+import { formatPrice, quote } from '../lib/pricing';
+import type { Pkg } from '../lib/pricing';
 
 // ─── Date helpers (all dates are ISO strings: YYYY-MM-DD) ────────────────────
 
@@ -21,6 +23,11 @@ const utcDate = (iso: string) => {
 };
 const nightsBetween = (a: string, b: string) =>
   Math.round((utcDate(b).getTime() - utcDate(a).getTime()) / 86_400_000);
+const addDaysISO = (iso: string, n: number) => {
+  const d = utcDate(iso);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+};
 const formatShort = (iso: string) =>
   utcDate(iso).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
 const formatLong = (iso: string) =>
@@ -55,11 +62,14 @@ type MonthProps = {
   checkIn: string;
   checkOut: string;
   hover: string;
+  blocked: Set<string>;
+  maxCheckOut: string;
+  packageNights: number; // 0 = free choice of dates
   onPick: (iso: string) => void;
   onHover: (iso: string) => void;
 };
 
-function Month({ year, month, today, checkIn, checkOut, hover, onPick, onHover }: MonthProps) {
+function Month({ year, month, today, checkIn, checkOut, hover, blocked, maxCheckOut, packageNights, onPick, onHover }: MonthProps) {
   const leading = new Date(year, month, 1).getDay(); // weeks start on Sunday
   const count = new Date(year, month + 1, 0).getDate();
   // While choosing check-out, preview the range up to the day under the pointer.
@@ -82,7 +92,15 @@ function Month({ year, month, today, checkIn, checkOut, hover, onPick, onHover }
         {Array.from({ length: count }, (_, i) => {
           const day = i + 1;
           const iso = toISO(year, month, day);
-          const disabled = iso < today;
+          // A booked night cannot start a stay. While choosing check-out, you may leave on the
+          // morning of the next booked night, but not stay past it.
+          const choosingCheckOut = packageNights === 0 && !!checkIn && !checkOut && iso > checkIn;
+          const booked = !choosingCheckOut && blocked.has(iso);
+          let disabled = iso < today || booked || (choosingCheckOut && !!maxCheckOut && iso > maxCheckOut);
+          if (!disabled && packageNights > 1) {
+            // A package needs every one of its nights to be free from this start date.
+            for (let k = 1; k < packageNights && !disabled; k++) disabled = blocked.has(addDaysISO(iso, k));
+          }
           const isStart = iso === checkIn;
           const isEnd = iso === checkOut;
           const isPreviewEnd = !checkOut && !!rangeEnd && iso === rangeEnd;
@@ -95,7 +113,7 @@ function Month({ year, month, today, checkIn, checkOut, hover, onPick, onHover }
           else if ((isEnd || isPreviewEnd) && checkIn) band = `linear-gradient(to left, transparent 50%, ${BAND} 50%)`;
 
           let tone = 'text-[#2b2b2b] hover:bg-[#eef2ee]';
-          if (disabled) tone = 'cursor-not-allowed text-[#c4beb1]';
+          if (disabled) tone = `cursor-not-allowed text-[#c4beb1]${booked ? ' line-through' : ''}`;
           else if (isStart || isEnd) tone = 'bg-[#2f4a3a] font-semibold text-white';
           else if (isPreviewEnd) tone = 'border-2 border-[#2f4a3a] font-semibold text-[#2f4a3a]';
           else if (inRange) tone = 'text-[#2f4a3a] hover:bg-[#cfdcd2]';
@@ -105,7 +123,7 @@ function Month({ year, month, today, checkIn, checkOut, hover, onPick, onHover }
               <button
                 type="button"
                 disabled={disabled}
-                aria-label={formatLong(iso)}
+                aria-label={booked ? `${formatLong(iso)}, booked` : formatLong(iso)}
                 aria-pressed={isStart || isEnd}
                 onClick={() => onPick(iso)}
                 onMouseEnter={() => onHover(iso)}
@@ -125,7 +143,27 @@ function Month({ year, month, today, checkIn, checkOut, hover, onPick, onHover }
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 
-type Confirmation = { reference: string; email: string; emailSent: boolean; checkIn: string; checkOut: string };
+function StayOption(props: { selected: boolean; onClick: () => void; title: string; detail: string; badge?: string }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={props.selected}
+      onClick={props.onClick}
+      className={`rounded-lg border px-3 py-2 text-left text-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4a3a] ${
+        props.selected ? 'border-[#2f4a3a] bg-[#eef3ef] ring-1 ring-[#2f4a3a]' : 'border-[#d9d2c3] bg-white hover:border-[#2f4a3a]'
+      }`}
+    >
+      <span className="flex items-start justify-between gap-2">
+        <span className="font-medium text-[#2b2b2b]">{props.title}</span>
+        {props.badge && <span className="rounded-full bg-[#dfe9e1] px-2 py-0.5 text-xs font-medium text-[#2f4a3a]">{props.badge}</span>}
+      </span>
+      <span className="block text-xs text-[#6b6b6b]">{props.detail}</span>
+    </button>
+  );
+}
+
+type Confirmation = { reference: string; email: string; emailSent: boolean; checkIn: string; checkOut: string; room: string; price: string };
+type RoomOption = { id: string; name: string; description: string | null; nightlyRate: number; available: boolean };
 
 export default function BookingPage() {
   const [checkIn, setCheckIn] = useState('');
@@ -139,6 +177,16 @@ export default function BookingPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
+  const [rooms, setRooms] = useState<RoomOption[]>([]);
+  const [roomId, setRoomId] = useState('');
+  const [blocked, setBlocked] = useState<Set<string>>(new Set());
+  const [loadedKey, setLoadedKey] = useState(''); // which room's booked dates have finished loading
+  const [notice, setNotice] = useState('');
+  const [refresh, setRefresh] = useState(0);
+  const [packages, setPackages] = useState<Pkg[]>([]);
+  const [packageId, setPackageId] = useState('');
+  const [freeFor, setFreeFor] = useState<{ key: string; ids: string[] } | null>(null);
+  const datesRef = useRef({ checkIn: '', checkOut: '' });
 
   const pickerRef = useRef<HTMLDivElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -146,6 +194,83 @@ export default function BookingPage() {
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const nights = checkIn && checkOut ? nightsBetween(checkIn, checkOut) : 0;
+  const room = rooms.find((r) => r.id === roomId);
+  const checking = !!roomId && loadedKey !== `${roomId}:${refresh}`;
+  const datesKey = checkIn && checkOut ? `${checkIn}|${checkOut}` : '';
+  const shownRooms = rooms.map((r) => ({
+    ...r,
+    available: freeFor && freeFor.key === datesKey ? freeFor.ids.includes(r.id) : true,
+  }));
+  const roomPackages = packages.filter((p) => p.roomId === roomId);
+  const pkg = roomPackages.find((p) => p.id === packageId) ?? null;
+  const packageNights = pkg ? pkg.nights : 0;
+  const estimate = room && nights > 0 ? quote(nights, room.nightlyRate, pkg) : null;
+  // Own dates that happen to match a cheaper package: offer a one-click switch.
+  const betterPackage = !pkg && estimate ? roomPackages.find((p) => p.nights === nights && p.price < estimate.total) : undefined;
+
+  useEffect(() => {
+    datesRef.current = { checkIn, checkOut };
+  });
+
+  // Load the rooms once.
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/availability')
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled || !Array.isArray(d.rooms)) return;
+        setRooms(d.rooms);
+        setPackages(Array.isArray(d.packages) ? d.packages : []);
+        setRoomId((current) => current || d.rooms[0]?.id || '');
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Nights already booked for the selected room. If the chosen dates clash, clear them.
+  useEffect(() => {
+    if (!roomId) return;
+    let cancelled = false;
+    const key = `${roomId}:${refresh}`;
+    fetch(`/api/availability?room=${encodeURIComponent(roomId)}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return;
+        const taken: string[] = Array.isArray(d.blocked) ? d.blocked : [];
+        setBlocked(new Set(taken));
+        const { checkIn: ci, checkOut: co } = datesRef.current;
+        if (ci && co && taken.some((n) => n >= ci && n < co)) {
+          setCheckIn('');
+          setCheckOut('');
+          setNotice('Those dates are not available for this room. Please choose new dates.');
+        }
+      })
+      .catch(() => !cancelled && setBlocked(new Set())) // the server re-checks when you submit
+      .finally(() => !cancelled && setLoadedKey(key));
+    return () => {
+      cancelled = true;
+    };
+  }, [roomId, refresh]);
+
+  // Which rooms are free for the chosen dates.
+  useEffect(() => {
+    if (!checkIn || !checkOut) return;
+    let cancelled = false;
+    const key = `${checkIn}|${checkOut}`;
+    fetch(`/api/availability?checkIn=${checkIn}&checkOut=${checkOut}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled || !Array.isArray(d.rooms)) return;
+        const ids = d.rooms.filter((r: { available: boolean }) => r.available).map((r: { id: string }) => r.id);
+        setFreeFor({ key, ids });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [checkIn, checkOut]);
 
   // Close the calendar on outside click or Escape.
   useEffect(() => {
@@ -193,6 +318,14 @@ export default function BookingPage() {
 
   const pickDate = (iso: string) => {
     setDateError('');
+    if (packageNights > 0) {
+      // A package fixes the length, so one click sets both dates.
+      setCheckIn(iso);
+      setCheckOut(addDaysISO(iso, packageNights));
+      setHover('');
+      closeTimer.current = setTimeout(() => setOpen(false), 300);
+      return;
+    }
     // First click, a fresh start after a full range, or a date before check-in: set check-in.
     if (!checkIn || checkOut || iso <= checkIn) {
       setCheckIn(iso);
@@ -202,6 +335,19 @@ export default function BookingPage() {
     }
     setCheckOut(iso);
     closeTimer.current = setTimeout(() => setOpen(false), 300);
+  };
+
+  const chooseRoom = (id: string) => {
+    setRoomId(id);
+    setPackageId('');
+    setNotice('');
+  };
+
+  const chooseStay = (id: string) => {
+    setPackageId(id);
+    setNotice('');
+    const next = packages.find((p) => p.id === id);
+    if (next && nights !== next.nights) clearDates(); // a package has a fixed length
   };
 
   const clearDates = () => {
@@ -215,6 +361,11 @@ export default function BookingPage() {
     if (!checkIn || !checkOut) {
       setDateError('Choose your check-in and check-out dates.');
       openCalendar();
+      return;
+    }
+
+    if (!roomId) {
+      setError('Please choose a room.');
       return;
     }
 
@@ -233,6 +384,8 @@ export default function BookingPage() {
       if (res.ok) {
         setConfirmation({
           reference: result.reference ?? '',
+          room: rooms.find((r) => r.id === roomId)?.name ?? '',
+          price: estimate ? formatPrice(estimate.total) : '',
           email: String(data.email),
           emailSent: result.guestEmailSent !== false,
           checkIn,
@@ -240,6 +393,10 @@ export default function BookingPage() {
         });
       } else {
         setError(result.error || `Something went wrong (error ${res.status}). Please try again.`);
+        if (res.status === 409) {
+          clearDates();
+          setRefresh((n) => n + 1); // reload the booked dates
+        }
       }
     } catch {
       setError('We could not reach the server. Check your connection and try again.');
@@ -252,6 +409,7 @@ export default function BookingPage() {
     setConfirmation(null);
     clearDates();
     setGuests(2);
+    setRefresh((n) => n + 1);
   };
 
   // ── Confirmation view ──
@@ -277,7 +435,7 @@ export default function BookingPage() {
         )}
         <p className="mt-6 text-[#2b2b2b]">
           {formatShort(confirmation.checkIn)} to {formatShort(confirmation.checkOut)}
-          <span className="text-[#6b6b6b]"> · {plural(nightsBetween(confirmation.checkIn, confirmation.checkOut), 'night')}</span>
+          <span className="text-[#6b6b6b]"> · {plural(nightsBetween(confirmation.checkIn, confirmation.checkOut), 'night')}{confirmation.room ? ` · ${confirmation.room}` : ''}{confirmation.price ? ` · Estimated ${confirmation.price}` : ''}</span>
         </p>
         <button
           type="button"
@@ -293,11 +451,14 @@ export default function BookingPage() {
   // ── Booking form ──
   const nextView = shiftMonth(view, 1);
   const atCurrentMonth = !!today && view.y * 12 + view.m <= parseISO(today).y * 12 + parseISO(today).m;
-  const monthProps = { today, checkIn, checkOut, hover, onPick: pickDate, onHover: setHover };
+  // While choosing check-out, the first booked night after check-in is the latest day you can leave.
+  const maxCheckOut = checkIn && !checkOut ? ([...blocked].filter((n) => n > checkIn).sort()[0] ?? '') : '';
+  const monthProps = { today, checkIn, checkOut, hover, blocked, maxCheckOut, packageNights, onPick: pickDate, onHover: setHover };
 
-  let calendarHint = 'Select your check-in date';
+  let calendarHint = packageNights ? `Choose a start date for your ${plural(packageNights, 'night')}` : 'Select your check-in date';
   if (checkIn && !checkOut) calendarHint = 'Now select your check-out date';
   if (nights > 0) calendarHint = plural(nights, 'night');
+  if (checking) calendarHint = 'Checking availability…';
 
   return (
     <div className="mx-auto my-10 max-w-2xl rounded-2xl border border-[#e6e0d5] bg-white p-6 shadow-sm sm:p-8">
@@ -330,6 +491,67 @@ export default function BookingPage() {
           </div>
         </div>
 
+        {/* Room first: it decides which dates are open */}
+        <fieldset>
+          <legend className={labelClass}>Room</legend>
+          <div className="mt-1 grid gap-2 sm:grid-cols-3">
+            {rooms.length === 0 && <p className="text-sm text-[#6b6b6b] sm:col-span-3">Loading rooms…</p>}
+            {shownRooms.map((r) => {
+              const selected = r.id === roomId;
+              return (
+                <button
+                  key={r.id}
+                  type="button"
+                  disabled={!r.available}
+                  aria-pressed={selected}
+                  onClick={() => chooseRoom(r.id)}
+                  className={`rounded-lg border px-3 py-2 text-left text-sm transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f4a3a] ${
+                    selected ? 'border-[#2f4a3a] bg-[#eef3ef] ring-1 ring-[#2f4a3a]' : 'border-[#d9d2c3] bg-white hover:border-[#2f4a3a]'
+                  } ${!r.available ? 'cursor-not-allowed opacity-60 hover:border-[#d9d2c3]' : ''}`}
+                >
+                  <span className="block font-medium text-[#2b2b2b]">{r.name}</span>
+                  {r.available && r.nightlyRate > 0 && (
+                    <span className="block text-xs font-medium text-[#2f4a3a]">{formatPrice(r.nightlyRate)} per night</span>
+                  )}
+                  {(!r.available || r.description) && (
+                    <span className="block text-xs text-[#6b6b6b]">{r.available ? r.description : 'Booked for your dates'}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          <input type="hidden" name="roomId" value={roomId} />
+          <input type="hidden" name="packageId" value={packageId} />
+        </fieldset>
+
+        {/* Own dates, or a fixed-length package */}
+        {roomPackages.length > 0 && (
+          <fieldset>
+            <legend className={labelClass}>Stay type</legend>
+            <div className="mt-1 grid gap-2 sm:grid-cols-2">
+              <StayOption
+                selected={!pkg}
+                onClick={() => chooseStay('')}
+                title="Choose your own dates"
+                detail={room && room.nightlyRate > 0 ? `${formatPrice(room.nightlyRate)} per night` : 'Any length of stay'}
+              />
+              {roomPackages.map((p) => {
+                const saving = room && room.nightlyRate > 0 ? room.nightlyRate * p.nights - p.price : 0;
+                return (
+                  <StayOption
+                    key={p.id}
+                    selected={p.id === packageId}
+                    onClick={() => chooseStay(p.id)}
+                    title={p.name}
+                    detail={`${plural(p.nights, 'night')} · ${formatPrice(p.price)}`}
+                    badge={saving > 0 ? `Save ${formatPrice(saving)}` : undefined}
+                  />
+                );
+              })}
+            </div>
+          </fieldset>
+        )}
+
         {/* One field for both dates */}
         <div ref={pickerRef} className="relative">
           <span className={labelClass}>Dates</span>
@@ -356,6 +578,7 @@ export default function BookingPage() {
             </span>
           </button>
           {dateError && <p className="mt-1.5 text-sm text-red-600">{dateError}</p>}
+          {notice && <p className="mt-1.5 text-sm text-[#8a4b24]">{notice}</p>}
 
           <input type="hidden" name="checkIn" value={checkIn} />
           <input type="hidden" name="checkOut" value={checkOut} />
@@ -394,7 +617,10 @@ export default function BookingPage() {
               </div>
 
               <div className="mt-3 flex items-center justify-between border-t border-[#e6e0d5] pt-3 text-sm">
-                <span className="text-[#6b6b6b]">{calendarHint}</span>
+                <span className="text-[#6b6b6b]">
+                  {calendarHint}
+                  {blocked.size > 0 && <span className="ml-3 line-through opacity-70">Booked</span>}
+                </span>
                 <button
                   type="button"
                   onClick={clearDates}
@@ -408,7 +634,32 @@ export default function BookingPage() {
           )}
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
+        {estimate && (
+          <div className="rounded-xl border border-[#d9d2c3] bg-[#f7f3ec] p-4" aria-live="polite">
+            <div className="flex items-end justify-between gap-4">
+              <div>
+                <p className="text-sm text-[#6b6b6b]">Estimated total</p>
+                <p className="text-sm text-[#2b2b2b]">{estimate.label}</p>
+              </div>
+              <p className="text-2xl font-semibold text-[#2f4a3a]">{formatPrice(estimate.total)}</p>
+            </div>
+            {estimate.savings > 0 && (
+              <p className="mt-2 text-sm font-medium text-[#2f4a3a]">You save {formatPrice(estimate.savings)} with this package.</p>
+            )}
+            {betterPackage && (
+              <button
+                type="button"
+                onClick={() => chooseStay(betterPackage.id)}
+                className="mt-2 text-sm font-medium text-[#2f4a3a] underline underline-offset-4"
+              >
+                Switch to the {betterPackage.name} for {formatPrice(betterPackage.price)} and save {formatPrice(estimate.total - betterPackage.price)}
+              </button>
+            )}
+            <p className="mt-2 text-xs text-[#6b6b6b]">Estimate only. We confirm the final amount when we reply.</p>
+          </div>
+        )}
+
+        <div className="grid gap-4 md:grid-cols-2">
           <div>
             <span className={labelClass}>Guests</span>
             <div className="mt-1 flex items-center justify-between rounded-lg border border-[#d9d2c3] bg-white px-2 py-1">
@@ -433,14 +684,6 @@ export default function BookingPage() {
               </button>
             </div>
             <input type="hidden" name="guests" value={guests} />
-          </div>
-          <div>
-            <label htmlFor="roomType" className={labelClass}>Room or package</label>
-            <select id="roomType" name="roomType" className={inputClass}>
-              <option value="Standard Room">Standard Room</option>
-              <option value="Deluxe Suite">Deluxe Suite</option>
-              <option value="Retreat Package">Retreat Package</option>
-            </select>
           </div>
           <div>
             <label htmlFor="arrivalTime" className={labelClass}>
