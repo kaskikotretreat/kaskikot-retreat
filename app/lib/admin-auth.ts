@@ -16,7 +16,34 @@ async function sign(message: string): Promise<string> {
 
 export const secretConfigured = () => (process.env.ADMIN_SECRET ?? '').length >= 16;
 export const adminConfigured = async () => secretConfigured() && (await passwordConfigured());
-export const isHttps = (req: Request) => new URL(req.url).protocol === 'https:';
+const LOCAL = /(^|\/\/)(localhost|127\.0\.0\.1|\[::1\])(:|\/|$)/;
+
+/** The address the visitor typed. `req.url` is not used: behind Cloudflare, Next.js reports its own address (localhost:3000) there. */
+function visitedHost(req: Request): string {
+  return (req.headers.get('x-forwarded-host') ?? req.headers.get('host') ?? '').split(',')[0].trim();
+}
+
+/** True when the visitor is on https. Decides whether login cookies get the Secure flag. */
+export function isHttps(req: Request): boolean {
+  const proto = req.headers.get('x-forwarded-proto');
+  if (proto) return proto.split(',')[0].trim() === 'https';
+  const host = visitedHost(req);
+  return host ? !LOCAL.test(host) : new URL(req.url).protocol === 'https:';
+}
+
+/**
+ * The web address to put in emailed links.
+ * On your own computer: http://localhost:3000. On the live site: SITE_URL if you set it, otherwise the address being visited.
+ * A SITE_URL that points at localhost is ignored on the live site.
+ */
+export function siteOrigin(req: Request): string {
+  const host = visitedHost(req);
+  const configured = (process.env.SITE_URL ?? '').trim().replace(/\/$/, '');
+  if (host && LOCAL.test(host)) return `http://${host}`;
+  if (configured && !LOCAL.test(configured)) return configured;
+  if (host) return `https://${host}`;
+  return new URL(req.url).origin;
+}
 
 /** A signed value that expires. `kind` keeps login cookies and two-factor tickets from being swapped. */
 async function makeToken(kind: 'session' | 'ticket', seconds: number): Promise<string> {

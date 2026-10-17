@@ -155,7 +155,7 @@ export default function NavBar({ intro = false }: { intro?: boolean }) {
         } ${
           solid
             ? 'bg-[#f7f3ec]/90 text-[#1f2f26] shadow-[0_1px_0_rgba(31,47,38,.14)] backdrop-blur-md'
-            : 'bg-transparent text-[#f7f3ec]'
+            : 'bg-transparent text-[#f7f3ec] [text-shadow:0_1px_10px_rgba(8,45,90,.4)]'
         } ${intro ? 'kk-nav-in' : ''}`}
       >
         {/* Dark scrim keeps white text readable over bright photos */}
@@ -171,7 +171,7 @@ export default function NavBar({ intro = false }: { intro?: boolean }) {
               <path d="M2 25 L10 12 L15 19 L21 8 L30 25" />
               <circle cx="25" cy="7" r="2" />
             </svg>
-            <span className={`${display.className} text-2xl tracking-wide`}>Kaskikot Holiday Home</span>
+            <span className={`${display.className} text-2xl tracking-wide`}>Kaskikot Retreat</span>
           </Link>
 
           <nav aria-label="Main" className="hidden items-center gap-8 md:flex">

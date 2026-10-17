@@ -1,7 +1,7 @@
 // app/api/admin/reset/route.ts
 // Forgot password. The link is only ever emailed to the admin address (ADMIN_EMAIL), never to an address typed in.
 import { NextResponse } from 'next/server';
-import { adminConfigured, sameOrigin } from '../../../lib/admin-auth';
+import { adminConfigured, sameOrigin, siteOrigin } from '../../../lib/admin-auth';
 import { clearFailures, consumeResetToken, createResetToken, isLocked, passwordProblem, recordFailure, setPassword } from '../../../lib/admin-security';
 import { missingEmailSettings, sendEmail } from '../../../lib/brevo';
 import { buildResetEmail } from '../../../lib/email-templates';
@@ -22,8 +22,7 @@ export async function POST(req: Request) {
       if (await isLocked('reset', 3, 60 * 60_000)) return reply; // same answer, nothing sent
       await recordFailure('reset'); // counts requests, so nobody can flood the inbox
 
-      const origin = (process.env.SITE_URL || new URL(req.url).origin).replace(/\/$/, '');
-      const link = `${origin}/admin/reset?token=${await createResetToken()}`;
+      const link = `${siteOrigin(req)}/admin/reset?token=${await createResetToken()}`;
       await sendEmail('Reset', { to: { email: to }, ...buildResetEmail(link) });
       return reply;
     }

@@ -113,7 +113,14 @@ function Month({ year, month, today, checkIn, checkOut, hover, blocked, maxCheck
           else if ((isEnd || isPreviewEnd) && checkIn) band = `linear-gradient(to left, transparent 50%, ${BAND} 50%)`;
 
           let tone = 'text-[#2b2b2b] hover:bg-[#eef2ee]';
-          if (disabled) tone = `cursor-not-allowed text-[#c4beb1]${booked ? ' line-through' : ''}`;
+          if (disabled) {
+            // Booked nights get a grey chip; days out of reach for this stay a lighter one; past days stay faint text.
+            tone = booked
+              ? 'cursor-not-allowed bg-[#e4e1da] text-[#8a857a] line-through'
+              : iso >= today
+                ? 'cursor-not-allowed bg-[#f1efea] text-[#b3aea2]'
+                : 'cursor-not-allowed text-[#c4beb1]';
+          }
           else if (isStart || isEnd) tone = 'bg-[#2f4a3a] font-semibold text-white';
           else if (isPreviewEnd) tone = 'border-2 border-[#2f4a3a] font-semibold text-[#2f4a3a]';
           else if (inRange) tone = 'text-[#2f4a3a] hover:bg-[#cfdcd2]';
@@ -180,6 +187,8 @@ export default function BookingPage() {
   const [rooms, setRooms] = useState<RoomOption[]>([]);
   const [roomId, setRoomId] = useState('');
   const [blocked, setBlocked] = useState<Set<string>>(new Set());
+  const [roomsStatus, setRoomsStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [roomsTry, setRoomsTry] = useState(0);
   const [loadedKey, setLoadedKey] = useState(''); // which room's booked dates have finished loading
   const [notice, setNotice] = useState('');
   const [refresh, setRefresh] = useState(0);
@@ -187,6 +196,7 @@ export default function BookingPage() {
   const [packageId, setPackageId] = useState('');
   const [freeFor, setFreeFor] = useState<{ key: string; ids: string[] } | null>(null);
   const datesRef = useRef({ checkIn: '', checkOut: '' });
+  const presetDone = useRef(false);
 
   const pickerRef = useRef<HTMLDivElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -212,22 +222,43 @@ export default function BookingPage() {
     datesRef.current = { checkIn, checkOut };
   });
 
-  // Load the rooms once.
+  // Load the rooms (again when the guest taps "Try again").
   useEffect(() => {
     let cancelled = false;
     fetch('/api/availability')
       .then((r) => r.json())
       .then((d) => {
-        if (cancelled || !Array.isArray(d.rooms)) return;
+        if (cancelled) return;
+        if (!Array.isArray(d.rooms)) {
+          setRoomsStatus('error');
+          return;
+        }
         setRooms(d.rooms);
         setPackages(Array.isArray(d.packages) ? d.packages : []);
-        setRoomId((current) => current || d.rooms[0]?.id || '');
+        // Choices made in the hero search bar arrive as ?room=&checkIn=&checkOut=&guests= (applied once).
+        const q = presetDone.current ? null : new URLSearchParams(window.location.search);
+        presetDone.current = true;
+        const wantRoom = q?.get('room') ?? '';
+        setRoomId((current) => current || (d.rooms.some((r: { id: string }) => r.id === wantRoom) ? wantRoom : d.rooms[0]?.id) || '');
+        if (q) {
+          const ci = q.get('checkIn') ?? '';
+          const co = q.get('checkOut') ?? '';
+          const iso = /^\d{4}-\d{2}-\d{2}$/;
+          if (iso.test(ci) && iso.test(co) && ci >= todayISO() && co > ci) {
+            setCheckIn(ci);
+            setCheckOut(co);
+            setView({ y: parseISO(ci).y, m: parseISO(ci).m });
+          }
+          const g = Number(q.get('guests'));
+          if (Number.isInteger(g) && g >= 1 && g <= 10) setGuests(g);
+        }
+        setRoomsStatus('ready');
       })
-      .catch(() => {});
+      .catch(() => !cancelled && setRoomsStatus('error'));
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [roomsTry]);
 
   // Nights already booked for the selected room. If the chosen dates clash, clear them.
   useEffect(() => {
@@ -495,7 +526,25 @@ export default function BookingPage() {
         <fieldset>
           <legend className={labelClass}>Room</legend>
           <div className="mt-1 grid gap-2 sm:grid-cols-3">
-            {rooms.length === 0 && <p className="text-sm text-[#6b6b6b] sm:col-span-3">Loading rooms…</p>}
+            {roomsStatus === 'loading' && <p className="text-sm text-[#6b6b6b] sm:col-span-3">Loading rooms…</p>}
+            {roomsStatus === 'error' && (
+              <p role="alert" className="text-sm text-red-700 sm:col-span-3">
+                We could not load the rooms.{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRoomsStatus('loading');
+                    setRoomsTry((n) => n + 1);
+                  }}
+                  className="font-medium underline underline-offset-4"
+                >
+                  Try again
+                </button>
+              </p>
+            )}
+            {roomsStatus === 'ready' && rooms.length === 0 && (
+              <p className="text-sm text-[#6b6b6b] sm:col-span-3">No rooms are open for booking right now.</p>
+            )}
             {shownRooms.map((r) => {
               const selected = r.id === roomId;
               return (
@@ -619,7 +668,7 @@ export default function BookingPage() {
               <div className="mt-3 flex items-center justify-between border-t border-[#e6e0d5] pt-3 text-sm">
                 <span className="text-[#6b6b6b]">
                   {calendarHint}
-                  {blocked.size > 0 && <span className="ml-3 line-through opacity-70">Booked</span>}
+                  {blocked.size > 0 && <span className="ml-3 inline-flex items-center gap-1.5 align-middle"><span className="inline-block size-3.5 rounded-full bg-[#e4e1da]" aria-hidden="true" />Booked</span>}
                 </span>
                 <button
                   type="button"
