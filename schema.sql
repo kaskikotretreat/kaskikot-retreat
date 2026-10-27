@@ -1,11 +1,17 @@
--- schema.sql: for a NEW database. (Already ran the first version? Run migration-pricing.sql instead.)
+-- schema.sql: for a NEW database. (Already have a database? Run migration-guests.sql, migration-stay.sql, then migration-units.sql, once each instead.)
 CREATE TABLE IF NOT EXISTS rooms (
   id           TEXT PRIMARY KEY,           -- short slug used in URLs, e.g. 'standard'
   name         TEXT NOT NULL,
   description  TEXT,                       -- optional one-liner shown on the room card
   nightly_rate INTEGER NOT NULL DEFAULT 0, -- price per night in whole rupees. 0 = no price shown
   sort         INTEGER NOT NULL DEFAULT 0,
-  active       INTEGER NOT NULL DEFAULT 1
+  active       INTEGER NOT NULL DEFAULT 1,
+  max_guests       INTEGER NOT NULL DEFAULT 4,  -- most people the room can take
+  included_guests  INTEGER NOT NULL DEFAULT 2,  -- guests covered by the nightly price
+  extra_guest_rate INTEGER NOT NULL DEFAULT 0,  -- Rs added per night for each guest beyond included_guests
+  photos           TEXT NOT NULL DEFAULT '[]',  -- list of image paths, first is the cover (written by the admin page)
+  amenities        TEXT NOT NULL DEFAULT '[]',  -- list of amenity ids / the owner's own wording (written by the admin page)
+  units            INTEGER NOT NULL DEFAULT 1   -- how many identical rooms of this type you have
 );
 
 -- Fixed-length deals for one room, e.g. 3 nights, 7 nights, 30 nights. `price` is the TOTAL.

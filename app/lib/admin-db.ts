@@ -1,8 +1,20 @@
 // app/lib/admin-db.ts
 // Everything the admin page can read or change in the database.
 import { getDb } from './db';
+import { parseList } from './room-content';
 
-export type AdminRoom = { id: string; name: string; description: string | null; nightlyRate: number; active: boolean };
+export type AdminRoom = {
+  id: string;
+  name: string;
+  description: string | null;
+  nightlyRate: number;
+  maxGuests: number;
+  includedGuests: number;
+  extraGuestRate: number;
+  photos: string[];
+  amenities: string[];
+  active: boolean;
+};
 export type AdminPackage = { id: string; roomId: string; name: string; nights: number; price: number; active: boolean };
 export type AdminBooking = {
   id: number;
@@ -47,14 +59,16 @@ async function uniqueId(table: 'rooms' | 'packages', base: string): Promise<stri
 export async function adminSnapshot() {
   const db = getDb();
   const [rooms, packages, bookings] = await Promise.all([
-    db.prepare('SELECT id, name, description, nightly_rate AS nightlyRate, active FROM rooms ORDER BY sort, name')
-      .all<Omit<AdminRoom, 'active'> & { active: number }>(),
+    db.prepare(`SELECT id, name, description, nightly_rate AS nightlyRate, max_guests AS maxGuests,
+                included_guests AS includedGuests, extra_guest_rate AS extraGuestRate, photos, amenities, active
+                FROM rooms ORDER BY sort, name`)
+      .all<Omit<AdminRoom, 'active' | 'photos' | 'amenities'> & { active: number; photos: string | null; amenities: string | null }>(),
     db.prepare('SELECT id, room_id AS roomId, name, nights, price, active FROM packages ORDER BY room_id, sort, nights')
       .all<Omit<AdminPackage, 'active'> & { active: number }>(),
     db.prepare(`${BOOKING_SELECT} ORDER BY b.created_at DESC LIMIT 400`).all<AdminBooking>(),
   ]);
   return {
-    rooms: rooms.results.map((r) => ({ ...r, active: r.active === 1 })),
+    rooms: rooms.results.map((r) => ({ ...r, photos: parseList(r.photos), amenities: parseList(r.amenities), active: r.active === 1 })),
     packages: packages.results.map((p) => ({ ...p, active: p.active === 1 })),
     bookings: bookings.results,
   };
@@ -65,22 +79,45 @@ export async function roomExists(id: string): Promise<boolean> {
   return results.length > 0;
 }
 
-export async function saveRoom(r: { id?: string; name: string; description: string; nightlyRate: number; active: boolean }) {
+/** The photo list of one room (paths, first is the cover). */
+export async function getRoomPhotos(id: string): Promise<string[]> {
+  const { results } = await getDb().prepare('SELECT photos FROM rooms WHERE id = ?1').bind(id).all<{ photos: string | null }>();
+  return parseList(results[0]?.photos);
+}
+
+export async function setRoomPhotos(id: string, photos: string[]) {
+  await getDb().prepare('UPDATE rooms SET photos = ?2 WHERE id = ?1').bind(id, JSON.stringify(photos)).run();
+}
+
+/** Adds one photo to the end of the room's list and returns the new list. */
+export async function appendRoomPhoto(id: string, path: string): Promise<string[]> {
+  const next = [...(await getRoomPhotos(id)), path];
+  await setRoomPhotos(id, next);
+  return next;
+}
+
+export async function saveRoom(r: {
+  id?: string; name: string; description: string; nightlyRate: number;
+  maxGuests: number; includedGuests: number; extraGuestRate: number; units: number; amenities: string[]; active: boolean;
+}) {
   const db = getDb();
   if (r.id) {
     await db
-      .prepare('UPDATE rooms SET name = ?2, description = ?3, nightly_rate = ?4, active = ?5 WHERE id = ?1')
-      .bind(r.id, r.name, r.description || null, r.nightlyRate, r.active ? 1 : 0)
+      .prepare(
+        `UPDATE rooms SET name = ?2, description = ?3, nightly_rate = ?4, active = ?5,
+                max_guests = ?6, included_guests = ?7, extra_guest_rate = ?8, amenities = ?9 WHERE id = ?1`,
+      )
+      .bind(r.id, r.name, r.description || null, r.nightlyRate, r.active ? 1 : 0, r.maxGuests, r.includedGuests, r.extraGuestRate, JSON.stringify(r.amenities))
       .run();
     return r.id;
   }
   const id = await uniqueId('rooms', slug(r.name));
   await db
     .prepare(
-      `INSERT INTO rooms (id, name, description, nightly_rate, active, sort)
-       VALUES (?1, ?2, ?3, ?4, ?5, (SELECT COALESCE(MAX(sort), 0) + 1 FROM rooms))`,
+      `INSERT INTO rooms (id, name, description, nightly_rate, active, max_guests, included_guests, extra_guest_rate, amenities, sort)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, (SELECT COALESCE(MAX(sort), 0) + 1 FROM rooms))`,
     )
-    .bind(id, r.name, r.description || null, r.nightlyRate, r.active ? 1 : 0)
+    .bind(id, r.name, r.description || null, r.nightlyRate, r.active ? 1 : 0, r.maxGuests, r.includedGuests, r.extraGuestRate, JSON.stringify(r.amenities))
     .run();
   return id;
 }

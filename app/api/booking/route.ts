@@ -69,7 +69,7 @@ function parseBooking(raw: Record<string, unknown>): { parsed: Parsed } | { erro
       checkIn,
       checkOut,
       nights,
-      guests: Math.min(10, Math.max(1, parseInt(String(raw.guests), 10) || 1)),
+      guests: Math.min(50, Math.max(1, parseInt(String(raw.guests), 10) || 1)),
       arrivalTime: clean(raw.arrivalTime, 40),
       specialRequests: String(raw.specialRequests ?? '').trim().slice(0, 1000),
     },
@@ -106,6 +106,10 @@ export async function POST(req: Request) {
     const room = (await listRooms()).find((r) => r.id === parsed.roomId);
     if (!room) return fail('Please choose a room.', 400);
 
+    if (parsed.guests > room.maxGuests) {
+      return fail(`${room.name} sleeps up to ${room.maxGuests} ${room.maxGuests === 1 ? 'guest' : 'guests'}. Please reduce the number of guests or choose another room.`, 400);
+    }
+
     // The price is always worked out here from the database, never taken from the browser.
     const pkg = parsed.packageId
       ? (await listPackages()).find((p) => p.id === parsed.packageId && p.roomId === room.id)
@@ -114,7 +118,11 @@ export async function POST(req: Request) {
     if (pkg && pkg.nights !== parsed.nights) {
       return fail(`The ${pkg.name} package is for exactly ${pkg.nights} nights. Please adjust your dates.`, 400);
     }
-    const priced = quote(parsed.nights, room.nightlyRate, pkg);
+    const priced = quote(parsed.nights, room.nightlyRate, pkg, {
+      guests: parsed.guests,
+      included: room.includedGuests,
+      rate: room.extraGuestRate,
+    });
 
     const booking: Booking = {
       ...parsed,

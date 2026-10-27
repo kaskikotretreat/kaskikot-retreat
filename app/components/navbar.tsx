@@ -5,8 +5,9 @@ import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { display, sans } from '../Fonts';
+import { CONTACT } from '../lib/contact';
 
-const WHATSAPP = ''; // digits only with country code, e.g. '9779812345678'. Empty hides the button.
+const WHATSAPP = CONTACT.whatsapp; // set in app/lib/contact.ts. Empty hides the button.
 
 // Each id should match a section on the home page: <section id="stay">.
 const LINKS = [

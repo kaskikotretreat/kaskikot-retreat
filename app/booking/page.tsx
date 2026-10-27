@@ -170,7 +170,10 @@ function StayOption(props: { selected: boolean; onClick: () => void; title: stri
 }
 
 type Confirmation = { reference: string; email: string; emailSent: boolean; checkIn: string; checkOut: string; room: string; price: string };
-type RoomOption = { id: string; name: string; description: string | null; nightlyRate: number; available: boolean };
+type RoomOption = {
+  id: string; name: string; description: string | null; nightlyRate: number; available: boolean;
+  maxGuests: number; includedGuests: number; extraGuestRate: number;
+};
 
 export default function BookingPage() {
   const [checkIn, setCheckIn] = useState('');
@@ -214,7 +217,13 @@ export default function BookingPage() {
   const roomPackages = packages.filter((p) => p.roomId === roomId);
   const pkg = roomPackages.find((p) => p.id === packageId) ?? null;
   const packageNights = pkg ? pkg.nights : 0;
-  const estimate = room && nights > 0 ? quote(nights, room.nightlyRate, pkg) : null;
+  // Guests are capped by the room, and everyone beyond the included number adds to the price.
+  const maxGuests = room?.maxGuests ?? 10;
+  const guestCount = Math.min(guests, maxGuests);
+  const estimate =
+    room && nights > 0
+      ? quote(nights, room.nightlyRate, pkg, { guests: guestCount, included: room.includedGuests, rate: room.extraGuestRate })
+      : null;
   // Own dates that happen to match a cheaper package: offer a one-click switch.
   const betterPackage = !pkg && estimate ? roomPackages.find((p) => p.nights === nights && p.price < estimate.total) : undefined;
 
@@ -714,25 +723,33 @@ export default function BookingPage() {
             <div className="mt-1 flex items-center justify-between rounded-lg border border-[#d9d2c3] bg-white px-2 py-1">
               <button
                 type="button"
-                onClick={() => setGuests((g) => Math.max(1, g - 1))}
-                disabled={guests <= 1}
+                onClick={() => setGuests(Math.max(1, guestCount - 1))}
+                disabled={guestCount <= 1}
                 aria-label="Fewer guests"
                 className="flex h-6 w-6 items-center justify-center rounded-full border border-[#d9d2c3] text-base leading-none text-[#2b2b2b] transition hover:border-[#2f4a3a] disabled:cursor-not-allowed disabled:text-[#c4beb1] disabled:hover:border-[#d9d2c3]"
               >
                 −
               </button>
-              <span className="text-sm font-medium text-[#2b2b2b]" aria-live="polite">{plural(guests, 'guest')}</span>
+              <span className="text-sm font-medium text-[#2b2b2b]" aria-live="polite">{plural(guestCount, 'guest')}</span>
               <button
                 type="button"
-                onClick={() => setGuests((g) => Math.min(10, g + 1))}
-                disabled={guests >= 10}
+                onClick={() => setGuests(Math.min(maxGuests, guestCount + 1))}
+                disabled={guestCount >= maxGuests}
                 aria-label="More guests"
                 className="flex h-6 w-6 items-center justify-center rounded-full border border-[#d9d2c3] text-base leading-none text-[#2b2b2b] transition hover:border-[#2f4a3a] disabled:cursor-not-allowed disabled:text-[#c4beb1] disabled:hover:border-[#d9d2c3]"
               >
                 +
               </button>
             </div>
-            <input type="hidden" name="guests" value={guests} />
+            <input type="hidden" name="guests" value={guestCount} />
+            {room && (
+              <p className="mt-1 text-xs text-[#6b6b6b]">
+                Sleeps up to {room.maxGuests}.
+                {room.extraGuestRate > 0 && room.maxGuests > room.includedGuests
+                  ? ` Price covers ${room.includedGuests}; each extra guest adds ${formatPrice(room.extraGuestRate)} per night.`
+                  : ''}
+              </p>
+            )}
           </div>
           <div>
             <label htmlFor="arrivalTime" className={labelClass}>

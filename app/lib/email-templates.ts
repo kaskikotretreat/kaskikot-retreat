@@ -3,13 +3,14 @@
 // because that is what email clients (Gmail, Outlook, Apple Mail) render reliably.
 
 import { formatPrice } from './pricing';
+import { CONTACT } from './contact';
 
 // ─── Edit these to match your property ───────────────────────────────────────
 export const BRAND = {
   name: 'Kaskikot Retreat & Holiday Home',
   shortName: 'Kaskikot Retreat',
   replyTime: 'within 24 hours',
-  whatsapp: '', // digits only with country code, e.g. '9779812345678'. Leave empty to hide.
+  whatsapp: CONTACT.whatsapp, // set in app/lib/contact.ts. Leave empty there to hide.
   colors: {
     primary: '#2f4a3a',
     accent: '#b5653a',

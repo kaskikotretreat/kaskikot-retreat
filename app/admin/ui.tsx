@@ -2,7 +2,10 @@
 // Shared types, styles and small components for the admin screens.
 import type { ReactNode } from 'react';
 
-export type Room = { id: string; name: string; description: string | null; nightlyRate: number; active: boolean };
+export type Room = {
+  id: string; name: string; description: string | null; nightlyRate: number;
+  maxGuests: number; includedGuests: number; extraGuestRate: number; units: number; photos: string[]; amenities: string[]; active: boolean;
+};
 export type Pkg = { id: string; roomId: string; name: string; nights: number; price: number; active: boolean };
 export type Booking = {
   id: number; reference: string; roomId: string; roomName: string; checkIn: string; checkOut: string; status: string;

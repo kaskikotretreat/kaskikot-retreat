@@ -3,10 +3,12 @@
 import { NextResponse } from 'next/server';
 import { guard } from '../../lib/admin-auth';
 import {
-  addBlock, adminSnapshot, deleteBlock, deletePackage, getBooking, roomExists,
-  savePackage, saveRoom, setBookingStatus, type AdminBooking,
+  addBlock, adminSnapshot, deleteBlock, deletePackage, getBooking, getRoomPhotos, roomExists,
+  savePackage, saveRoom, setBookingStatus, setRoomPhotos, type AdminBooking,
 } from '../../lib/admin-db';
 import { missingEmailSettings, sendEmail } from '../../lib/brevo';
+import { deleteMedia } from '../../lib/media';
+import { cleanAmenities, cleanPhotos, normalizePhoto } from '../../lib/room-content';
 import { buildStatusEmail, countNights, type Booking } from '../../lib/email-templates';
 
 const ID = /^[a-z0-9_-]{1,60}$/;
@@ -62,9 +64,56 @@ export async function POST(req: Request) {
         const id = body.id ? text(body.id, 60) : undefined;
         if (!name) return bad('Please enter a room name.');
         if (rate === null) return bad('The price must be a whole number of rupees.');
+        const maxGuests = int(body.maxGuests, 1, 50);
+        const includedGuests = int(body.includedGuests, 1, 50);
+        const extraRate = int(body.extraGuestRate, 0, 10_000_000);
+        const units = int(body.units, 1, 50);
+        if (units === null) return bad('The number of rooms must be a whole number from 1 to 50.');
+        if (maxGuests === null) return bad('The most guests must be a whole number from 1 to 50.');
+        if (includedGuests === null) return bad('Guests included in the price must be a whole number from 1 to 50.');
+        if (includedGuests > maxGuests) return bad('Guests included in the price cannot be more than the most guests.');
+        if (extraRate === null) return bad('The extra guest price must be a whole number of rupees.');
         if (id && (!ID.test(id) || !(await roomExists(id)))) return bad('That room was not found.');
-        await saveRoom({ id, name, description: text(body.description, 140), nightlyRate: rate, active: body.active !== false });
+        await saveRoom({
+          id, name, description: text(body.description, 140), nightlyRate: rate,
+          maxGuests, includedGuests, extraGuestRate: extraRate, units,
+          amenities: cleanAmenities(body.amenities),
+          active: body.active !== false,
+        });
         return ok(id ? 'Room saved.' : 'Room added.');
+      }
+
+      // Reorder or remove photos. Only photos the room already has are accepted, so nothing new can be slipped in here.
+      case 'setPhotos': {
+        const roomId = text(body.roomId, 60);
+        if (!ID.test(roomId) || !(await roomExists(roomId))) return bad('That room was not found.');
+        const current = await getRoomPhotos(roomId);
+        const next = cleanPhotos(body.photos);
+        if (!next.every((p) => current.includes(p))) return bad('The photo list is out of date. Please refresh the page.', 409);
+        await setRoomPhotos(roomId, next);
+        await deleteMedia(current.filter((p) => !next.includes(p)));
+        return ok('Photos updated.');
+      }
+
+      // Add photos that are files in your project folder (public/images/rooms), by file name.
+      case 'addPhotoNames': {
+        const roomId = text(body.roomId, 60);
+        if (!ID.test(roomId) || !(await roomExists(roomId))) return bad('That room was not found.');
+        const typed = (Array.isArray(body.names) ? body.names : []).map((n: unknown) => String(n ?? '').trim()).filter(Boolean).slice(0, 30);
+        if (typed.length === 0) return bad('Type at least one photo file name, like standard-1.jpg.');
+        const current = await getRoomPhotos(roomId);
+        const added: string[] = [];
+        let skipped = 0;
+        for (const name of typed) {
+          const path = normalizePhoto(name);
+          // Only files from the project folder. Uploaded photos (/media/...) are never added by typing.
+          if (!path || path.startsWith('/media/') || current.includes(path) || added.includes(path)) { skipped++; continue; }
+          if (current.length + added.length >= 12) return bad('A room can have up to 12 photos. Remove one first.');
+          added.push(path);
+        }
+        if (added.length === 0) return bad('Those names were not usable, or are already added. Use names like standard-1.jpg (letters, numbers and dashes; JPG, PNG or WebP).');
+        await setRoomPhotos(roomId, [...current, ...added]);
+        return ok(added.length === 1 ? 'Photo added.' : `${added.length} photos added.`);
       }
 
       case 'savePackage': {

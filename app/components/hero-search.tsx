@@ -7,7 +7,7 @@ import type { FormEvent, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import RangeCalendar from './range-calendar';
 
-type RoomOption = { id: string; name: string; nightlyRate: number };
+type RoomOption = { id: string; name: string; nightlyRate: number; maxGuests: number };
 
 // ─── Date helpers (ISO strings: YYYY-MM-DD) ──────────────────────────────────
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -117,7 +117,7 @@ export default function HeroSearch() {
       .then((r) => r.json())
       .then((d) => {
         if (off || !Array.isArray(d.rooms)) return;
-        setRooms(d.rooms.map((r: RoomOption) => ({ id: r.id, name: r.name, nightlyRate: r.nightlyRate })));
+        setRooms(d.rooms.map((r: RoomOption) => ({ id: r.id, name: r.name, nightlyRate: r.nightlyRate, maxGuests: r.maxGuests ?? 10 })));
       })
       .catch(() => {}); // the bar still works with "Any room"
     return () => {
@@ -158,6 +158,9 @@ export default function HeroSearch() {
 
   const room = rooms.find((r) => r.id === roomId);
   const nights = checkIn && checkOut ? nightsBetween(checkIn, checkOut) : 0;
+  // The guest count is capped by the chosen room (or by the biggest room when none is chosen).
+  const maxGuests = room ? room.maxGuests : rooms.length ? Math.max(...rooms.map((r) => r.maxGuests)) : 10;
+  const guestCount = Math.min(guests, maxGuests);
 
   const go = (e: FormEvent) => {
     e.preventDefault();
@@ -171,7 +174,7 @@ export default function HeroSearch() {
       q.set('checkIn', checkIn);
       q.set('checkOut', checkOut);
     }
-    q.set('guests', String(guests));
+    q.set('guests', String(guestCount));
     router.push(`/booking?${q.toString()}`);
   };
 
@@ -251,13 +254,13 @@ export default function HeroSearch() {
       <Segment icon={<GuestsIcon />} label="Guests" className="col-span-2 sm:col-span-1">
         <span className="flex items-center justify-between gap-2">
           <span className={VALUE} aria-live="polite">
-            {guests} {guests === 1 ? 'guest' : 'guests'}
+            {guestCount} {guestCount === 1 ? 'guest' : 'guests'}
           </span>
           <span className="flex shrink-0 items-center gap-1.5">
             <button
               type="button"
-              onClick={() => setGuests((g) => Math.max(1, g - 1))}
-              disabled={guests <= 1}
+              onClick={() => setGuests(Math.max(1, guestCount - 1))}
+              disabled={guestCount <= 1}
               aria-label="Fewer guests"
               className="grid size-7 place-items-center rounded-full border border-[#cfd8cf] text-lg leading-none text-[#1b2e23] transition hover:bg-white disabled:opacity-35"
             >
@@ -265,8 +268,8 @@ export default function HeroSearch() {
             </button>
             <button
               type="button"
-              onClick={() => setGuests((g) => Math.min(10, g + 1))}
-              disabled={guests >= 10}
+              onClick={() => setGuests(Math.min(maxGuests, guestCount + 1))}
+              disabled={guestCount >= maxGuests}
               aria-label="More guests"
               className="grid size-7 place-items-center rounded-full border border-[#cfd8cf] text-lg leading-none text-[#1b2e23] transition hover:bg-white disabled:opacity-35"
             >

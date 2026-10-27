@@ -147,7 +147,7 @@ export default function AdminPage() {
         {view === 'security' ? <SecurityView say={say} onLoggedOut={loggedOut} /> : !data ? (
           <p className="py-20 text-center text-sm text-slate-500">Loading…</p>
         ) : view === 'bookings' ? <BookingsView data={data} act={act} busy={busy} />
-          : view === 'rooms' ? <RoomsView data={data} act={act} busy={busy} />
+          : view === 'rooms' ? <RoomsView data={data} act={act} say={say} refresh={() => setReload((n) => n + 1)} busy={busy} />
           : <CalendarView data={data} act={act} busy={busy} />}
       </main>
 
