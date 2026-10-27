@@ -207,15 +207,16 @@ export default function Views() {
     return () => { live = false; };
   }, []);
 
-  const all: Item[] = useMemo(
-    () =>
-      VIEWS.flatMap((v) => {
-        const src = viewSrc(v.file);
-        const size = loaded[src];
-        return size ? [{ src, caption: v.caption ?? '', tag: v.tag ?? '', w: size.w, h: size.h }] : [];
-      }),
-    [loaded],
-  );
+  const all: Item[] = useMemo(() => {
+    const seen = new Set<string>(); // a file listed twice is shown once (the first line wins)
+    return VIEWS.flatMap((v) => {
+      const src = viewSrc(v.file);
+      const size = loaded[src];
+      if (!size || seen.has(src)) return [];
+      seen.add(src);
+      return [{ src, caption: v.caption ?? '', tag: v.tag ?? '', w: size.w, h: size.h }];
+    });
+  }, [loaded]);
   const tags = useMemo(() => [...new Set(all.map((i) => i.tag).filter(Boolean))], [all]);
   const activeTag = tag === 'All' || tags.includes(tag) ? tag : 'All';
   const shown = activeTag === 'All' ? all : all.filter((i) => i.tag === activeTag);

@@ -20,8 +20,9 @@ type Experience = {
   zoom: number; // 1.1 or more, crops in closer
 };
 
-// TODO: replace each image with its own photo (put them in public/images/).
-// The hero photo is used as a stand-in so the section works right away.
+// Photos live in public/images/. The path starts with /images/ and the file name must match exactly,
+// including the ending (.webp is not .jpg is not .jpeg). Open the path in your browser to test it,
+// for example http://localhost:3000/images/farming.webp. If it shows the photo, the path is right.
 const EXPERIENCES: Experience[] = [
   {
     title: 'Sunrise hike to the hill',
@@ -43,7 +44,7 @@ const EXPERIENCES: Experience[] = [
     title: 'Life on the farm',
     summary: 'Join the daily work: milk the buffaloes and spend time working in the fields.',
     highlights: ['Milking the buffaloes', 'Working in the fields'],
-    image: '/farming.jpg',
+    image: '/images/farming.webp',
     position: '75% 95%',
     zoom: 1.6,
   },
@@ -157,7 +158,7 @@ export default function Experiences() {
             {EXPERIENCES.map((exp, i) => (
               <div
                 key={exp.title}
-                className="kx-anim absolute inset-0"
+                className="kx-anim absolute inset-0 bg-[#2b3f33]"
                 style={{
                   zIndex: i,
                   clipPath: i <= active ? 'inset(0% 0% 0% 0%)' : 'inset(100% 0% 0% 0%)',
@@ -179,6 +180,8 @@ export default function Experiences() {
                       src={exp.image}
                       alt={exp.title}
                       fill
+                      loading="eager"
+                      onError={() => console.warn(`Experience photo not found: ${exp.image}`)}
                       sizes="(min-width: 1024px) 58vw, 100vw"
                       className="object-cover"
                       style={{ objectPosition: exp.position }}
