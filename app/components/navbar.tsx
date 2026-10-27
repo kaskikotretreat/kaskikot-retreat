@@ -14,6 +14,7 @@ const LINKS = [
   { id: 'stay', label: 'The stay' },
   { id: 'experiences', label: 'Experiences' },
   { id: 'views', label: 'Views' },
+  { id: 'location', label: 'Location' },
   { id: 'contact', label: 'Contact' },
 ];
 
@@ -103,7 +104,7 @@ export default function NavBar({ intro = false }: { intro?: boolean }) {
     const previous = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
-    const wide = window.matchMedia('(min-width: 768px)');
+    const wide = window.matchMedia('(min-width: 1024px)');
     const onWide = () => wide.matches && setOpen(false);
     window.addEventListener('keydown', onKey);
     wide.addEventListener('change', onWide);
@@ -175,7 +176,7 @@ export default function NavBar({ intro = false }: { intro?: boolean }) {
             <span className={`${display.className} text-2xl tracking-wide`}>Kaskikot Retreat</span>
           </Link>
 
-          <nav aria-label="Main" className="hidden items-center gap-8 md:flex">
+          <nav aria-label="Main" className="hidden items-center gap-7 lg:flex">
             {LINKS.map((l) => (
               <Link
                 key={l.id}
@@ -204,7 +205,7 @@ export default function NavBar({ intro = false }: { intro?: boolean }) {
             aria-label={open ? 'Close menu' : 'Open menu'}
             aria-expanded={open}
             aria-controls="mobile-menu"
-            className={`relative -mr-2 flex h-11 w-11 items-center justify-center rounded-full md:hidden ${focusRing}`}
+            className={`relative -mr-2 flex h-11 w-11 items-center justify-center rounded-full lg:hidden ${focusRing}`}
           >
             <span className="relative block h-3.5 w-6">
               <span className={`absolute left-0 h-0.5 w-6 rounded-full bg-current transition-all duration-300 motion-reduce:transition-none ${open ? 'top-[6px] rotate-45' : 'top-0'}`} />
@@ -225,7 +226,7 @@ export default function NavBar({ intro = false }: { intro?: boolean }) {
         id="mobile-menu"
         data-open={open}
         aria-hidden={!open}
-        className={`${sans.className} kk-menu fixed inset-0 z-40 flex flex-col justify-between bg-[#1f2f26] px-6 pb-8 pt-28 text-[#f7f3ec] md:hidden`}
+        className={`${sans.className} kk-menu fixed inset-0 z-40 flex flex-col justify-between bg-[#1f2f26] px-6 pb-8 pt-28 text-[#f7f3ec] lg:hidden`}
       >
         <ul>
           {LINKS.map((l, i) => (

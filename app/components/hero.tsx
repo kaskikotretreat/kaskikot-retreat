@@ -1,5 +1,5 @@
 // app/components/hero.tsx
-// Plain CSS animation, no extra packages. Photo: public/hero.jpeg (swap HERO below to change it).
+
 import Image from 'next/image';
 import type { CSSProperties, ReactNode } from 'react';
 import { Dancing_Script, Instrument_Serif, Montserrat } from 'next/font/google';
@@ -12,7 +12,7 @@ const sans = Montserrat({ subsets: ['latin'], display: 'swap' }); // everything 
 
 // The photo. Use a bright, clean photo with no text baked in. `position` chooses what stays visible when the screen crops it.
 const HERO = {
-  src: '/hero.jpeg',
+  src: '/hero.webp',
   alt: 'Kaskikot Retreat on the hill above Pokhara, with green terraces, the lake and the mountains beyond',
   position: 'object-[40%_60%]',
 };
