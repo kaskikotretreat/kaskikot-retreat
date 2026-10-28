@@ -23,6 +23,17 @@ export const VIEWS: View[] = [
   { file: 'pokhara.webp', caption: 'Pokhara below', tag: 'Views' },
   { file: 'surrounding.webp', caption: 'Green all around', tag: 'Views' },
 
+  // Guests
+  { file: 'guest.webp', caption: 'Picture with guest', tag: 'Guests'},
+  { file: 'guest1.webp', caption: 'Picture with guest', tag: 'Guests'},
+  { file: 'guest2.webp', caption: 'Picture with guest', tag: 'Guests'},
+  { file: 'guest3.webp', caption: 'Picture with guest', tag: 'Guests'},
+  { file: 'guest4.webp', caption: 'Picture with guest', tag: 'Guests'},
+  { file: 'guest5.webp', caption: 'Picture with guest', tag: 'Guests'},
+  { file: 'guest6.webp', caption: 'Picture with guest', tag: 'Guests'},
+  { file: 'guest7.webp', caption: 'Picture with guest', tag: 'Guests'},
+  { file: 'guest8.webp', caption: 'Picture with guest', tag: 'Guests'},
+
   // Village and countryside
   { file: 'terracefields.webp', caption: 'Terraced fields', tag: 'Village' },
   { file: 'villageview.webp', caption: 'The village from above', tag: 'Village' },
